@@ -1,0 +1,7 @@
+.direnv/
+.envrc
+
+a.out
+fileops.c
+maefuck
+programs/
