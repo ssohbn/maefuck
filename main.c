@@ -22,7 +22,9 @@ Stack newStack(int stackSize) {
 void pushStack(Stack *stack, long offsets) {
   // if we are going over the max amt just double the capacity
   if (stack->offset >= stack->capacity * sizeof(stack->offset)) {
+    printf("reallocating\n");
     stack->capacity = stack->capacity * 2;
+
     stack->file_positions =
         (long *)realloc(stack->file_positions, stack->capacity * sizeof(long));
   }
@@ -73,6 +75,41 @@ void printCells(cell *cells, int readct) {
   printf("\n");
 };
 
+// returns 1 if found
+// returns 0 if reached EOF
+int skipForward(FILE *bf_file) {
+
+  int skips = 0;
+
+  char input;
+  while ((input = getc(bf_file))) {
+    switch (input) {
+
+    case '[':
+      skips++;
+      break;
+
+    case ']':
+      // early exit stop skipping, we have found matching brace
+      if (skips == 0) {
+        return 1;
+      }
+
+      skips--;
+      break;
+
+    case EOF:
+      return 0;
+
+    default:
+      // printf("skipping over %c\n", input);
+      break;
+    }
+  }
+
+  return -1;
+}
+
 int main(int argc, char *argv[]) {
   if (argc != 2) {
 
@@ -80,7 +117,7 @@ int main(int argc, char *argv[]) {
     return 1;
   };
 
-  Stack jumps = newStack(5);
+  Stack jumps = newStack(10);
   cell cells[4096] = {0};
   cell *currentCell = cells;
 
@@ -93,48 +130,16 @@ int main(int argc, char *argv[]) {
     return -1;
   }
 
-  // using globals for these instead of a function call is real nasty
-  int skipping = 0;
-  int skips = 0;
-
   char input;
 
-  long offsets; // offset buffer
+  long loop_entry; // offset buffer
 
   while ((input = fgetc(bf_file))) {
-    if (input == EOF)
-      break;
-    // printCells(cells, 10);
-    // printf("instruction: %c: %ld\n", input, ftell(bf_file));
-    // printf("currentCell: %p\n", (void*) currentCell);
-
-    while (skipping) {
-      switch (input) {
-
-      case '[':
-        skips++;
-        break;
-
-      case ']':
-        // early exit stop skipping, we have found matching brace
-        if (skips == 0) {
-          // printf("found matching brace at %ld\n", ftell(bf_file));
-          skipping = 0;
-          break;
-        }
-
-        skips--;
-        break;
-
-      default:
-        // printf("skipping over %c\n", input);
-        break;
-      }
-
-      input = fgetc(bf_file);
-    }
-
     switch (input) {
+    case EOF:
+      // printf("reached end of file\n");
+      return 0;
+
     case '?':
       printCells(cells, 10);
       break;
@@ -182,28 +187,28 @@ int main(int argc, char *argv[]) {
         break;
       }
 
-      offsets = peekStack(&jumps);
+      loop_entry = peekStack(&jumps);
       // currentCell = (cell *)offsets.cellAddress;
-      int offset = offsets - ftell(bf_file);
-      // printf("current: %ld\n", ftell(bf_file));
-      // printf("offset: %d\n", offset);
-      // printf("going to: %ld\n", offsets.file_position);
+      int to_loop_entry = loop_entry - ftell(bf_file);
 
-      // goes here and input reads NEXT character.
-      // need to go back so that we can readd positon to stack after pop
-      fseek(bf_file, offset, SEEK_CUR);
+      fseek(bf_file, to_loop_entry, SEEK_CUR);
       break;
 
     case '[':
       // Jump past the matching ] if the cell at the pointer is 0
       if (*currentCell == 0) {
-        skipping = 1;
+        int ok = skipForward(bf_file);
+        if (!ok) {
+          printf("catastrophic error\n");
+          return 1;
+        }
+
         break;
       }
 
-      offsets = ftell(bf_file);
+      loop_entry = ftell(bf_file);
 
-      pushStack(&jumps, offsets);
+      pushStack(&jumps, loop_entry);
       break;
 
     default:

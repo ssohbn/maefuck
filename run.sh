@@ -1,2 +1,2 @@
 make
-./maefuck ./helloworld.bf
+./maefuck ./programs/quine.bf
