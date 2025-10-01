@@ -212,7 +212,7 @@ int main(int argc, char *argv[]) {
       break;
 
     default:
-      // comment
+      // anything else is considered a comment!
       break;
     }
   }
